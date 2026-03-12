@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>席替えくじ</title>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Antique+Soft&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#07070e;--surface:#0e0e1a;--card:#111120;--border:#1e1e34;--border2:#282844;--gold:#d4a843;--teal:#38c9a8;--red:#e05c5c;--text:#eae4d6;--muted2:#787898;}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans JP',sans-serif;min-height:100vh;overflow-x:hidden}
+input{background:var(--surface);border:1px solid var(--border2);color:var(--text);padding:11px 14px;border-radius:9px;font-family:inherit;font-size:.9rem;outline:none;transition:border-color .2s,box-shadow .2s;width:100%}
+input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(212,168,67,.1)}
+button{font-family:'Noto Sans JP',sans-serif;cursor:pointer}
+.state{display:none}
+.state.on{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:40px 18px;text-align:center;animation:stIn .32s ease}
+@keyframes stIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pillPop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes spinFlicker{0%{filter:blur(0)}50%{filter:blur(1.5px)}}
+@keyframes cfF{0%{transform:translateY(-10px) rotate(0);opacity:1}100%{transform:translateY(105vh) rotate(720deg);opacity:0}}
+.cf{position:fixed;pointer-events:none;z-index:9999;width:7px;height:7px;animation:cfF linear forwards}
+.bg-ring{position:fixed;border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:0}
+.logo{font-family:'Zen Antique Soft',serif;font-size:clamp(1.7rem,5vw,2.6rem);color:var(--gold);text-shadow:0 0 36px rgba(212,168,67,.3);letter-spacing:.12em;position:relative;z-index:1}
+.logo-sub{font-size:.7rem;letter-spacing:.26em;color:var(--muted2);margin-top:3px;margin-bottom:4px;position:relative;z-index:1}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;position:relative;overflow:hidden;width:min(460px,95vw)}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);opacity:.35}
+.fl-label{font-size:.71rem;color:var(--muted2);margin-bottom:4px;letter-spacing:.06em}
+.prog-wrap{width:min(380px,90vw);margin:14px auto;position:relative;z-index:1}
+.prog-bar{height:2px;background:var(--border);border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--gold),var(--teal));transition:width .5s ease}
+.done-box{background:rgba(212,168,67,.06);border:1px solid rgba(212,168,67,.2);border-radius:14px;padding:28px 36px;margin-top:16px;position:relative;z-index:1}
+.done-seat{font-family:'Zen Antique Soft',serif;font-size:5rem;color:var(--gold);text-shadow:0 0 24px rgba(212,168,67,.4);line-height:1}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--card);border:1px solid var(--border2);padding:10px 20px;border-radius:11px;font-size:.83rem;transition:transform .28s;z-index:9999;white-space:nowrap}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.muted{color:var(--muted2);font-size:.8rem}
+.zr{position:relative;z-index:1}
+</style>
+</head>
+<body>
+
+<div class="bg-ring" style="width:580px;height:580px;border:1px solid rgba(212,168,67,.04)"></div>
+<div class="bg-ring" style="width:820px;height:820px;border:1px solid rgba(56,201,168,.025)"></div>
+<div class="bg-ring" style="width:350px;height:350px;border:1px solid rgba(212,168,67,.055)"></div>
+
+<!-- not ready -->
+<div class="state on" id="st-notready">
+  <div class="logo">席替えくじ</div>
+  <div class="logo-sub">SEAT LOTTERY</div>
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:28px 32px;margin-top:16px;position:relative;z-index:1">
+    <div style="font-size:1.5rem;margin-bottom:10px">⏳</div>
+    <div style="font-weight:700;margin-bottom:6px">まだ開始されていません</div>
+    <div class="muted">先生が設定を完了するまでお待ちください</div>
+  </div>
+  <button onclick="initPage()" style="margin-top:16px;background:transparent;color:var(--muted2);border:1px solid var(--border2);padding:8px 18px;border-radius:9px;font-size:.78rem;position:relative;z-index:1">↻ 再読み込み</button>
+</div>
+
+<!-- register -->
+<div class="state" id="st-register">
+  <div class="logo">席替えくじ</div>
+  <div class="logo-sub">SEAT LOTTERY</div>
+  <div class="prog-wrap">
+    <div class="muted" id="reg-prog-lbl" style="margin-bottom:5px"></div>
+    <div class="prog-bar"><div class="prog-fill" id="reg-prog-fill" style="width:0%"></div></div>
+  </div>
+  <div class="card">
+    <div style="font-family:'Zen Antique Soft',serif;font-size:.9rem;color:var(--gold);margin-bottom:16px">情報を入力してくじを引く</div>
+    <div style="display:flex;flex-direction:column;gap:12px;text-align:left">
+      <div><div class="fl-label">名前</div><input type="text" id="r-name" placeholder="例: 田中 純正" autocomplete="off"></div>
+      <div><div class="fl-label">出席番号</div><input type="number" id="r-num" placeholder="例: 15" min="1" autocomplete="off"></div>
+      <div><div class="fl-label">SPCメール（@の前）</div><input type="text" id="r-email" placeholder="例: j.junsei" autocomplete="off"></div>
+      <div id="reg-err" style="color:var(--red);font-size:.8rem;display:none;text-align:center"></div>
+      <button onclick="registerAndDraw()" style="background:var(--gold);color:#07070e;border:none;padding:14px;font-size:.95rem;border-radius:12px;font-weight:700;margin-top:4px;letter-spacing:.04em">🎲 登録してくじを引く</button>
+    </div>
+  </div>
+</div>
+
+<!-- draw -->
+<div class="state" id="st-draw">
+  <div class="logo">席替えくじ</div>
+  <div class="logo-sub">SEAT LOTTERY</div>
+  <div class="prog-wrap">
+    <div class="muted" id="draw-prog-lbl" style="margin-bottom:5px"></div>
+    <div class="prog-bar"><div class="prog-fill" id="draw-prog-fill" style="width:0%"></div></div>
+  </div>
+  <div style="position:relative;z-index:1;width:min(480px,95vw)">
+    <div style="font-size:.68rem;color:var(--muted2);letter-spacing:.18em;text-transform:uppercase;margin-bottom:10px">くじを引く人</div>
+    <div id="draw-slot-name" style="font-family:'Zen Antique Soft',serif;font-size:clamp(2.2rem,7vw,3.8rem);min-height:70px;display:flex;align-items:center;justify-content:center"></div>
+    <div id="draw-slot-sub" style="font-size:.8rem;color:var(--muted2);min-height:20px;margin-top:2px"></div>
+    <div id="draw-slot-result" style="min-height:76px;display:flex;align-items:center;justify-content:center;margin-top:16px"></div>
+  </div>
+  <button id="draw-btn" onclick="executeDraw()" style="margin-top:24px;padding:15px 52px;font-size:1rem;border-radius:13px;letter-spacing:.1em;background:var(--gold);color:#07070e;border:none;font-weight:700;position:relative;z-index:1">🎲 くじを引く</button>
+  <div id="draw-after" style="display:none;margin-top:14px;position:relative;z-index:1"></div>
+</div>
+
+<!-- done -->
+<div class="state" id="st-done">
+  <div class="logo">席替えくじ</div>
+  <div class="logo-sub">SEAT LOTTERY</div>
+  <div class="prog-wrap">
+    <div class="muted" id="done-prog-lbl" style="margin-bottom:5px"></div>
+    <div class="prog-bar"><div class="prog-fill" id="done-prog-fill" style="width:0%"></div></div>
+  </div>
+  <div class="muted zr" id="done-name-lbl" style="margin-bottom:4px"></div>
+  <div class="done-box">
+    <div class="muted" style="margin-bottom:8px">あなたの席は</div>
+    <div class="done-seat" id="done-seat-num">—</div>
+    <div class="muted" style="margin-top:6px">番</div>
+  </div>
+  <div id="done-fixed-badge" style="display:none;align-items:center;gap:6px;background:rgba(56,201,168,.1);border:1px solid rgba(56,201,168,.25);color:var(--teal);padding:4px 12px;border-radius:20px;font-size:.72rem;font-weight:700;margin-top:12px;position:relative;z-index:1">📌 先生により席が指定されています</div>
+  <button onclick="goBack()" style="margin-top:16px;background:transparent;color:var(--muted2);border:1px solid var(--border2);padding:8px 18px;border-radius:9px;font-size:.78rem;position:relative;z-index:1">← 戻る（別の人が使う）</button>
+</div>
+
+<!-- complete -->
+<div class="state" id="st-complete">
+  <div class="logo" style="margin-bottom:10px">全員完了！</div>
+  <div class="muted zr">全ての席が埋まりました 🎉</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, onValue, set, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDW1a4R8cWfO6g2OdxjAX0lrCo4DU-csFc",
+  authDomain: "onnrainnsekigae.firebaseapp.com",
+  databaseURL: "https://onnrainnsekigae-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "onnrainnsekigae",
+  storageBucket: "onnrainnsekigae.firebasestorage.app",
+  messagingSenderId: "266715525665",
+  appId: "1:266715525665:web:f7808489d5d8b6ab856960"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const dbRef = ref(db, 'seatLottery');
+
+let _state = {};
+let isAnimating = false;
+let _pending = null;
+
+function assignedSeatOf(num, asgn){ return Object.entries(asgn||{}).find(([,v])=>v.num==num); }
+function availableSeats(cs, asgn, fx={}){
+  const total=(cs||[]).reduce((a,b)=>a+b,0);
+  const used=new Set(Object.keys(asgn||{}).map(Number));
+  const reserved=new Set(Object.values(fx||{}).map(Number));
+  return Array.from({length:total},(_,i)=>i+1).filter(i=>!used.has(i)&&!reserved.has(i));
+}
+
+async function saveState(patch){
+  const next={..._state,...patch};
+  await set(dbRef,next); _state=next; return next;
+}
+
+function showState(id){
+  document.querySelectorAll('.state').forEach(el=>el.classList.remove('on'));
+  document.getElementById('st-'+id).classList.add('on');
+  window.scrollTo(0,0);
+}
+function toast(msg,d=2600){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),d); }
+function showErr(msg){ const e=document.getElementById('reg-err'); e.textContent=msg; e.style.display='block'; }
+
+function updateProg(){
+  const cs=_state.colSeats||[], asgn=_state.assignments||{};
+  const total=(cs).reduce((a,b)=>a+b,0), done=Object.keys(asgn).length;
+  const pct=total?Math.round(done/total*100):0, lbl=`${done} / ${total} 席 埋まり`;
+  ['reg','draw','done'].forEach(p=>{
+    const l=document.getElementById(p+'-prog-lbl'), f=document.getElementById(p+'-prog-fill');
+    if(l) l.textContent=lbl;
+    if(f) f.style.width=pct+'%';
+  });
+}
+
+function initPage(){
+  if(!_state.lotteryOpen||!_state.colSeats){ showState('notready'); return; }
+  const avail=availableSeats(_state.colSeats,_state.assignments,_state.fixedSeats);
+  if(!avail.length){ showState('complete'); return; }
+  updateProg();
+  ['r-name','r-num','r-email'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('reg-err').style.display='none';
+  showState('register');
+}
+
+function goBack(){
+  ['r-name','r-num','r-email'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('reg-err').style.display='none';
+  updateProg(); showState('register');
+}
+
+async function registerAndDraw(){
+  const name=document.getElementById('r-name').value.trim();
+  const num=parseInt(document.getElementById('r-num').value);
+  const email=document.getElementById('r-email').value.trim().toLowerCase();
+  document.getElementById('reg-err').style.display='none';
+  if(!name||!num||!email){ showErr('全ての項目を入力してください'); return; }
+
+  // 最新データを取得
+  const snap=await get(dbRef); _state=snap.exists()?snap.val():{};
+  if(!_state.lotteryOpen){ showErr('席替えは終了しています'); return; }
+
+  // 出席番号の範囲チェック
+  const numMin=_state.numMin||1, numMax=_state.numMax||9999;
+  if(num<numMin||num>numMax){ showErr(`出席番号は ${numMin}〜${numMax} の範囲で入力してください`); return; }
+
+  const asgn=_state.assignments||{}, students=_state.students||{};
+  const cs=_state.colSeats||[], fx=_state.fixedSeats||{};
+
+  // 既に引いているか
+  const prevSeat=assignedSeatOf(num,asgn);
+  if(prevSeat){
+    const rec=asgn[prevSeat[0]];
+    if(rec.email.toLowerCase()===email){
+      document.getElementById('done-name-lbl').textContent=`${rec.name}（出席番号 ${rec.num}）`;
+      document.getElementById('done-seat-num').textContent=prevSeat[0];
+      document.getElementById('done-fixed-badge').style.display=rec.fixed?'inline-flex':'none';
+      updateProg(); showState('done');
+    } else { showErr('この出席番号は既にくじを引いています'); }
+    return;
+  }
+
+  // 固定席
+  if(fx[num]!==undefined){
+    const preReg=Array.isArray(students)?students.find(s=>s.num===num):null;
+    if(preReg&&preReg.email.toLowerCase()!==email){ showErr('出席番号またはメールが正しくありません'); return; }
+    const fixedId=fx[num];
+    const recName=preReg?preReg.name:name;
+    const na={...asgn}, ns=Array.isArray(students)?[...students]:[];
+    na[fixedId]={name:recName,num,email,fixed:true};
+    if(!ns.find(s=>s.num===num)) ns.push({name:recName,num,email,fixed:true});
+    await saveState({assignments:na,students:ns});
+    launchConfetti();
+    document.getElementById('done-name-lbl').textContent=`${recName}（出席番号 ${num}）`;
+    document.getElementById('done-seat-num').textContent=fixedId;
+    document.getElementById('done-fixed-badge').style.display='inline-flex';
+    updateProg(); showState('done'); return;
+  }
+
+  // メール重複
+  const studentsArr=Array.isArray(students)?students:[];
+  if(studentsArr.find(s=>s.email.toLowerCase()===email&&s.num!==num)){ showErr('このメールアドレスは既に使われています'); return; }
+
+  // 残席確認
+  const avail=availableSeats(cs,asgn,fx);
+  if(!avail.length){ showState('complete'); return; }
+
+  // くじ引き画面へ
+  _pending={name,num,email};
+  document.getElementById('draw-slot-name').textContent=name;
+  document.getElementById('draw-slot-name').style.color='var(--text)';
+  document.getElementById('draw-slot-sub').textContent=`出席番号 ${num}`;
+  document.getElementById('draw-slot-result').innerHTML='';
+  document.getElementById('draw-btn').style.display='block';
+  document.getElementById('draw-btn').disabled=false;
+  document.getElementById('draw-btn').textContent='🎲 くじを引く';
+  document.getElementById('draw-after').style.display='none';
+  updateProg(); showState('draw');
+}
+
+async function executeDraw(){
+  if(isAnimating||!_pending) return;
+  const snap=await get(dbRef); _state=snap.exists()?snap.val():{};
+  const {name,num,email}=_pending;
+  const avail=availableSeats(_state.colSeats,_state.assignments,_state.fixedSeats);
+  if(!avail.length){ showState('complete'); return; }
+  const chosen=avail[Math.floor(Math.random()*avail.length)];
+  isAnimating=true;
+  const btn=document.getElementById('draw-btn'), nameEl=document.getElementById('draw-slot-name'), resultEl=document.getElementById('draw-slot-result');
+  btn.disabled=true; nameEl.style.animation='spinFlicker .09s linear infinite'; nameEl.style.color='var(--teal)';
+  let tick=0, max=20+Math.floor(Math.random()*14);
+  const iv=setInterval(async()=>{
+    const fake=avail[Math.floor(Math.random()*avail.length)];
+    resultEl.innerHTML=`<span style="font-family:'Zen Antique Soft',serif;font-size:2.2rem;color:var(--teal)">→ ${fake}番</span>`;
+    tick++;
+    if(tick>=max){
+      clearInterval(iv);
+      nameEl.style.animation=''; nameEl.style.color='var(--text)';
+      const snap2=await get(dbRef); _state=snap2.exists()?snap2.val():{};
+      const na={..._state.assignments||{}}, ns=Array.isArray(_state.students)?[..._state.students]:[];
+      na[chosen]={name,num,email};
+      if(!ns.find(s=>s.num===num)) ns.push({name,num,email});
+      await saveState({assignments:na,students:ns});
+      isAnimating=false; _pending=null;
+      resultEl.innerHTML=`<div style="display:inline-flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--gold);border-radius:50px;padding:14px 30px;box-shadow:0 0 28px rgba(212,168,67,.14);animation:pillPop .5s cubic-bezier(.34,1.56,.64,1)">
+        <span style="font-family:'Zen Antique Soft',serif;font-size:1.3rem">${name}</span>
+        <span style="color:var(--muted2);font-size:.82rem">の席は</span>
+        <span style="font-family:'Zen Antique Soft',serif;font-size:2.2rem;color:var(--gold);text-shadow:0 0 14px rgba(212,168,67,.5)">${chosen}番</span>
+        <span style="font-size:1.4rem">🎉</span></div>`;
+      launchConfetti(); btn.style.display='none';
+      updateProg();
+      const after=document.getElementById('draw-after'); after.style.display='block';
+      const rem=availableSeats(_state.colSeats,na,_state.fixedSeats);
+      if(!rem.length){ after.innerHTML='<div class="muted">全ての席が埋まりました！</div>'; setTimeout(()=>showState('complete'),2400); }
+      else { after.innerHTML=`<button onclick="goBack()" style="background:transparent;color:var(--muted2);border:1px solid var(--border2);padding:9px 20px;border-radius:9px;font-size:.8rem">← 別の人が使う</button>`; }
+    }
+  },82);
+}
+
+function launchConfetti(){
+  const colors=['#d4a843','#38c9a8','#e05c5c','#fff','#c8a0ff'];
+  for(let i=0;i<52;i++){
+    setTimeout(()=>{
+      const el=document.createElement('div'); el.className='cf';
+      el.style.cssText=`left:${Math.random()*100}vw;background:${colors[~~(Math.random()*colors.length)]};border-radius:${Math.random()>.5?'50%':'2px'};animation-duration:${1.5+Math.random()*1.8}s;animation-delay:${Math.random()*.35}s`;
+      document.body.appendChild(el); setTimeout(()=>el.remove(),3800);
+    },i*18);
+  }
+}
+
+// グローバル公開
+window.initPage=initPage; window.registerAndDraw=registerAndDraw; window.executeDraw=executeDraw; window.goBack=goBack;
+
+// キーボード対応
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&['r-name','r-num','r-email'].includes(document.activeElement?.id)) registerAndDraw();
+});
+
+// Firebaseリアルタイム監視（他デバイスの更新を反映）
+onValue(dbRef, (snap) => {
+  _state = snap.exists() ? snap.val() : {};
+  updateProg();
+  // not ready → lotteryOpenになったら自動で登録画面へ
+  if(document.getElementById('st-notready').classList.contains('on') && _state.lotteryOpen && _state.colSeats){
+    initPage();
+  }
+});
+
+// 初回ロード
+get(dbRef).then(snap => {
+  _state = snap.exists() ? snap.val() : {};
+  initPage();
+});
+</script>
+</body>
+</html>
